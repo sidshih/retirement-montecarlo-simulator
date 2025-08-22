@@ -53,29 +53,35 @@ inflation = st.sidebar.number_input("年通膨率 (%)", 0.0, 10.0, 2.0) / 100
 withdraw_rate = st.sidebar.slider("固定比例提領率 (%)", 1.0, 10.0, 4.0, step=0.5) / 100
 n_sims = st.sidebar.slider("模擬次數", 1000, 20000, 5000, step=1000)
 
-# 下載ETF歷史數據
-# -------------------------------------------------------------
-# 注意：yfinance 在下載單一股票時，回傳的 DataFrame 結構與多個股票不同
-# 因此需要做判斷，確保取值的邏輯正確。
-# -------------------------------------------------------------
-data = yf.download(tickers, start="2005-01-01", end="2025-01-01")
+# === 下載ETF歷史數據 ===
+try:
+    data = yf.download(tickers, start="2005-01-01", end="2025-01-01")
+except Exception as e:
+    st.error(f"⚠️ 下載 ETF 數據時發生錯誤：{e}")
+    st.stop()
 
-# 檢查下載的數據是否為空的，避免後續錯誤
+# 檢查下載的數據是否為空
 if data.empty:
     st.error("⚠️ 無法下載 ETF 數據，請檢查代號是否正確。")
     st.stop()
 
-# 判斷 DataFrame 的欄位是否為多層索引 (MultiIndex)
+# 統一處理 "Adj Close"
+# yfinance 在下載單一股票時，回傳的 DataFrame 結構與多個股票不同
 if isinstance(data.columns, pd.MultiIndex):
+    # 下載多個 ETF，欄位是多層索引
     data = data["Adj Close"]
 else:
-    # 針對單一股票情況，直接取 "Adj Close"
+    # 下載單一 ETF，欄位是單層索引
     if "Adj Close" in data.columns:
+        # 使用雙層方括號確保結果仍然是 DataFrame
         data = data[["Adj Close"]]
     else:
-        # 如果 "Adj Close" 欄位不存在，則報錯
         st.error("⚠️ 歷史數據中找不到 'Adj Close' 欄位。")
         st.stop()
+
+data = data.dropna()
+returns = data.pct_change().dropna()
+portfolio_returns = (returns @ np.array(weights))
 
 # === 蒙地卡羅模擬函數 ===
 def run_simulation(strategy="fixed"):
