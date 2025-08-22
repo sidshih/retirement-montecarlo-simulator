@@ -2,15 +2,50 @@ import streamlit as st
 import yfinance as yf
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 st.set_page_config(page_title="退休蒙地卡羅模擬器", layout="wide")
 st.title("📊 ETF 退休蒙地卡羅模擬器（進階版）")
 
 # === 使用者輸入 ===
 st.sidebar.header("參數設定")
-tickers = st.sidebar.text_input("輸入ETF代號 (用逗號分隔)", "VTI,VXUS,BND").split(",")
-weights = st.sidebar.text_input("輸入各ETF投資比例 (逗號分隔，總和=1)", "0.6,0.2,0.2")
-weights = [float(w) for w in weights]
+
+# 預設值
+default_tickers = "VTI,VXUS,BND"
+default_weights = "0.6,0.2,0.2"
+
+# 範例按鈕
+if st.sidebar.button("載入範例組合 (VTI 60%, VXUS 20%, BND 20%)"):
+    st.session_state["tickers_input"] = default_tickers
+    st.session_state["weights_input"] = default_weights
+
+# ETF 輸入
+tickers = st.sidebar.text_input(
+    "輸入ETF代號 (用逗號分隔)", 
+    st.session_state.get("tickers_input", default_tickers)
+).split(",")
+
+# 投資比例輸入
+weights_str = st.sidebar.text_input(
+    "輸入各ETF投資比例 (逗號分隔，總和=1)", 
+    st.session_state.get("weights_input", default_weights)
+)
+
+try:
+    weights = [float(w.strip()) for w in weights_str.split(",") if w.strip() != ""]
+except ValueError:
+    st.error("⚠️ 投資比例必須是數字，請重新輸入，例如: 0.6,0.2,0.2")
+    st.stop()
+
+if len(weights) != len(tickers):
+    st.error(f"⚠️ ETF 數量 ({len(tickers)}) 與 比例數量 ({len(weights)}) 不一致")
+    st.stop()
+
+if abs(sum(weights) - 1.0) > 1e-6:
+    st.error("⚠️ 投資比例總和必須等於 1")
+    st.stop()
+
+# 其他參數
 years = st.sidebar.number_input("退休年數", 10, 60, 30)
 initial_assets = st.sidebar.number_input("初始資產 (美元)", 10000, 10000000, 1000000, step=10000)
 annual_spending = st.sidebar.number_input("每年花費 (美元)", 1000, 200000, 40000, step=1000)
@@ -81,3 +116,17 @@ ax2.set_title("部分模擬資產走勢 (藍=固定金額, 紅=比例提領)")
 ax2.set_xlabel("年份")
 ax2.set_ylabel("資產 (美元)")
 st.pyplot(fig2)
+
+# === 下載模擬結果 CSV ===
+st.subheader("📥 下載模擬結果")
+df_results = pd.DataFrame({
+    "固定金額提領": results_fixed,
+    "比例提領": results_percent
+})
+csv = df_results.to_csv(index=False).encode("utf-8")
+st.download_button(
+    label="下載模擬結果 CSV",
+    data=csv,
+    file_name="retirement_simulation_results.csv",
+    mime="text/csv",
+)
