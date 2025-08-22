@@ -60,12 +60,12 @@ except Exception as e:
     st.error(f"⚠️ 下載 ETF 數據時發生錯誤：{e}")
     st.stop()
 
-# 檢查下載的數據是否為空，避免後續錯誤
+# 檢查下載的數據是否為空
 if data.empty:
     st.error("⚠️ 無法下載 ETF 數據，請檢查代號是否正確。")
     st.stop()
 
-# 統一處理 "Adj Close"
+# 統一處理 "Adj Close" 欄位
 # yfinance 在下載單一股票時，回傳的 DataFrame 結構與多個股票不同
 if isinstance(data.columns, pd.MultiIndex):
     # 下載多個 ETF，欄位是多層索引
