@@ -53,42 +53,43 @@ inflation = st.sidebar.number_input("年通膨率 (%)", 0.0, 10.0, 2.0) / 100
 withdraw_rate = st.sidebar.slider("固定比例提領率 (%)", 1.0, 10.0, 4.0, step=0.5) / 100
 n_sims = st.sidebar.slider("模擬次數", 1000, 20000, 5000, step=1000)
 
-# === 下載ETF歷史數據 ===
-try:
-    data = yf.download(tickers, start="2005-01-01", end="2025-01-01")
-except Exception as e:
-    st.error(f"⚠️ 下載 ETF 數據時發生錯誤：{e}")
+# === 下載ETF歷史數據 (更強健的版本) ===
+adj_close_dfs = []
+valid_tickers = []
+for ticker in tickers:
+    ticker = ticker.strip() # 移除空白
+    if not ticker:
+        continue
+    
+    try:
+        # 下載單一股票數據
+        ticker_data = yf.download(ticker, start="2005-01-01", end="2025-01-01")
+        
+        # 檢查數據是否包含 'Adj Close'
+        if "Adj Close" in ticker_data.columns:
+            # 重新命名欄位為股票代號，方便合併
+            adj_close_dfs.append(ticker_data[["Adj Close"]].rename(columns={"Adj Close": ticker}))
+            valid_tickers.append(ticker)
+        else:
+            st.warning(f"⚠️ ETF '{ticker}' 數據中找不到 'Adj Close'，已忽略此代號。")
+
+    except Exception as e:
+        st.error(f"⚠️ 下載 ETF '{ticker}' 數據時發生錯誤：{e}")
+
+if not adj_close_dfs:
+    st.error("⚠️ 無法下載任何 ETF 數據，請檢查代號是否正確。")
     st.stop()
 
-# 檢查下載的數據是否為空
-if data.empty:
-    st.error("⚠️ 無法下載 ETF 數據，請檢查代號是否正確。")
-    st.stop()
+# 將所有有效的股票數據合併
+data = pd.concat(adj_close_dfs, axis=1)
 
-# 統一處理 "Adj Close" 欄位
-# yfinance 在下載單一股票時，回傳的 DataFrame 結構與多個股票不同
-if isinstance(data.columns, pd.MultiIndex):
-    # 檢查 "Adj Close" 是否存在於第一層索引中
-    if "Adj Close" in data.columns.get_level_values(0):
-        # 下載多個 ETF，欄位是多層索引
-        data = data["Adj Close"]
-    else:
-        st.error("⚠️ 歷史數據中找不到 'Adj Close' 欄位。")
-        st.stop()
-else:
-    # 下載單一 ETF，欄位是單層索引
-    if "Adj Close" in data.columns:
-        # 使用雙層方括號 [[...]] 確保結果仍然是 DataFrame
-        data = data[["Adj Close"]]
-    else:
-        st.error("⚠️ 歷史數據中找不到 'Adj Close' 欄位。")
-        st.stop()
-
-# 檢查處理後的數據是否為空，或是否只剩一行
-if data.empty or len(data) < 2:
-    st.error("⚠️ 數據處理後無效，請檢查 ETF 代號或時間範圍。")
-    st.stop()
-
+# 重新計算 weights，只考慮有效的 ETF
+if len(valid_tickers) != len(tickers):
+    st.warning("⚠️ 由於部分 ETF 代號無效，投資組合權重將重新分配。")
+    valid_weights = [weights[tickers.index(t)] for t in valid_tickers]
+    total_valid_weights = sum(valid_weights)
+    weights = [w / total_valid_weights for w in valid_weights]
+    
 data = data.dropna()
 returns = data.pct_change().dropna()
 
@@ -97,9 +98,10 @@ if returns.empty:
     st.error("⚠️ 數據處理後無法計算回報率，請檢查 ETF 代號或時間範圍。")
     st.stop()
 
-# 確保在只有一個 ETF 的情況下，weights 也是一個 NumPy 陣列
+# 確保權重陣列與回報率 DataFrame 的欄位數量匹配
 weights_array = np.array(weights)
 
+# 進行矩陣乘法
 portfolio_returns = (returns @ weights_array)
 
 # === 蒙地卡羅模擬函數 ===
