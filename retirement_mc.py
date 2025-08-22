@@ -60,7 +60,7 @@ except Exception as e:
     st.error(f"⚠️ 下載 ETF 數據時發生錯誤：{e}")
     st.stop()
 
-# 檢查下載的數據是否為空
+# 檢查下載的數據是否為空，避免後續錯誤
 if data.empty:
     st.error("⚠️ 無法下載 ETF 數據，請檢查代號是否正確。")
     st.stop()
@@ -73,7 +73,7 @@ if isinstance(data.columns, pd.MultiIndex):
 else:
     # 下載單一 ETF，欄位是單層索引
     if "Adj Close" in data.columns:
-        # 使用雙層方括號確保結果仍然是 DataFrame
+        # 使用雙層方括號 [[...]] 確保結果仍然是 DataFrame
         data = data[["Adj Close"]]
     else:
         st.error("⚠️ 歷史數據中找不到 'Adj Close' 欄位。")
@@ -81,7 +81,11 @@ else:
 
 data = data.dropna()
 returns = data.pct_change().dropna()
-portfolio_returns = (returns @ np.array(weights))
+
+# 確保在只有一個 ETF 的情況下，weights 也是一個 NumPy 陣列
+weights_array = np.array(weights)
+
+portfolio_returns = (returns @ weights_array)
 
 # === 蒙地卡羅模擬函數 ===
 def run_simulation(strategy="fixed"):
