@@ -54,7 +54,15 @@ withdraw_rate = st.sidebar.slider("固定比例提領率 (%)", 1.0, 10.0, 4.0, s
 n_sims = st.sidebar.slider("模擬次數", 1000, 20000, 5000, step=1000)
 
 # === 下載ETF歷史數據 ===
-data = yf.download(tickers, start="2005-01-01", end="2025-01-01")["Adj Close"].dropna()
+data = yf.download(tickers, start="2005-01-01", end="2025-01-01")
+
+# 統一處理 Adj Close
+if isinstance(data.columns, pd.MultiIndex):
+    data = data["Adj Close"]
+else:
+    data = data[["Adj Close"]]
+
+data = data.dropna()
 returns = data.pct_change().dropna()
 portfolio_returns = (returns @ np.array(weights))
 
