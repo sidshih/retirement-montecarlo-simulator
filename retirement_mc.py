@@ -53,18 +53,29 @@ inflation = st.sidebar.number_input("年通膨率 (%)", 0.0, 10.0, 2.0) / 100
 withdraw_rate = st.sidebar.slider("固定比例提領率 (%)", 1.0, 10.0, 4.0, step=0.5) / 100
 n_sims = st.sidebar.slider("模擬次數", 1000, 20000, 5000, step=1000)
 
-# === 下載ETF歷史數據 ===
+# 下載ETF歷史數據
+# -------------------------------------------------------------
+# 注意：yfinance 在下載單一股票時，回傳的 DataFrame 結構與多個股票不同
+# 因此需要做判斷，確保取值的邏輯正確。
+# -------------------------------------------------------------
 data = yf.download(tickers, start="2005-01-01", end="2025-01-01")
 
-# 統一處理 Adj Close
+# 檢查下載的數據是否為空的，避免後續錯誤
+if data.empty:
+    st.error("⚠️ 無法下載 ETF 數據，請檢查代號是否正確。")
+    st.stop()
+
+# 判斷 DataFrame 的欄位是否為多層索引 (MultiIndex)
 if isinstance(data.columns, pd.MultiIndex):
     data = data["Adj Close"]
 else:
-    data = data[["Adj Close"]]
-
-data = data.dropna()
-returns = data.pct_change().dropna()
-portfolio_returns = (returns @ np.array(weights))
+    # 針對單一股票情況，直接取 "Adj Close"
+    if "Adj Close" in data.columns:
+        data = data[["Adj Close"]]
+    else:
+        # 如果 "Adj Close" 欄位不存在，則報錯
+        st.error("⚠️ 歷史數據中找不到 'Adj Close' 欄位。")
+        st.stop()
 
 # === 蒙地卡羅模擬函數 ===
 def run_simulation(strategy="fixed"):
