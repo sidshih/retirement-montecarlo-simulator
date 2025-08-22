@@ -68,8 +68,13 @@ if data.empty:
 # 統一處理 "Adj Close" 欄位
 # yfinance 在下載單一股票時，回傳的 DataFrame 結構與多個股票不同
 if isinstance(data.columns, pd.MultiIndex):
-    # 下載多個 ETF，欄位是多層索引
-    data = data["Adj Close"]
+    # 檢查 "Adj Close" 是否存在於第一層索引中
+    if "Adj Close" in data.columns.get_level_values(0):
+        # 下載多個 ETF，欄位是多層索引
+        data = data["Adj Close"]
+    else:
+        st.error("⚠️ 歷史數據中找不到 'Adj Close' 欄位。")
+        st.stop()
 else:
     # 下載單一 ETF，欄位是單層索引
     if "Adj Close" in data.columns:
@@ -79,8 +84,18 @@ else:
         st.error("⚠️ 歷史數據中找不到 'Adj Close' 欄位。")
         st.stop()
 
+# 檢查處理後的數據是否為空，或是否只剩一行
+if data.empty or len(data) < 2:
+    st.error("⚠️ 數據處理後無效，請檢查 ETF 代號或時間範圍。")
+    st.stop()
+
 data = data.dropna()
 returns = data.pct_change().dropna()
+
+# 檢查回報率 DataFrame 是否為空
+if returns.empty:
+    st.error("⚠️ 數據處理後無法計算回報率，請檢查 ETF 代號或時間範圍。")
+    st.stop()
 
 # 確保在只有一個 ETF 的情況下，weights 也是一個 NumPy 陣列
 weights_array = np.array(weights)
